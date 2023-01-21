@@ -88,18 +88,38 @@ async fn create(new_receipt: web::Json<models::ReceiptEntry>) -> impl Responder 
         },
         Some(mut all_receipts) => {
             let max_id = create_id(&all_receipts);
-            let new_receipt = models::Receipt {
-                id: max_id,
-                store: new_receipt.store,
-                date: new_receipt.date,
-                paid_by: new_receipt.paid_by,
-                items: new_receipt.items,
-                subtotal: new_receipt.subtotal,
-                contributor_to_pay: new_receipt.contributor_to_pay,
-            };
+            let new_receipt = models::Receipt::from_receipt_entry(max_id, new_receipt);
             all_receipts.push(new_receipt.clone());
             match write_receipt_file(&all_receipts) {
                 Ok(_) => HttpResponse::Ok().json(new_receipt),
+                Err(e) => HttpResponse::Ok().json(models::ErrorResponse::new(format!("{:?}", e).as_str()))
+            }
+        }
+    }
+}
+
+
+#[put("/{id}")]
+async fn edit(
+    request: web::Path<models::ReceiptIdentifier>,
+    new_receipt: web::Json<models::ReceiptEntry>
+) -> impl Responder {
+    match get_all_receipts() {
+        None => HttpResponse::Ok().json(models::ErrorResponse::new("No receipts found.")),
+        Some(mut all_receipts) => {
+            let request = request.into_inner();
+            let new_receipt = new_receipt.into_inner();
+            let receipt_option = all_receipts.iter().filter(|r| r.id == request.id).nth(0);
+            if receipt_option.is_none() {
+                return HttpResponse::Ok().json(models::ErrorResponse::new(&format!("No receipt with id {} found.", request.id)));
+            }
+            let mut receipt = receipt_option.unwrap().to_owned();
+            receipt.replace_values(new_receipt);
+            let index = all_receipts.iter().position(|r| r.id == receipt.id).unwrap();
+            all_receipts[index] = receipt;
+            
+            match write_receipt_file(&all_receipts) {
+                Ok(_) => HttpResponse::Ok().json(&all_receipts[index]),
                 Err(e) => HttpResponse::Ok().json(models::ErrorResponse::new(format!("{:?}", e).as_str()))
             }
         }
@@ -118,7 +138,7 @@ async fn delete(request: web::Path<models::ReceiptIdentifier>) -> impl Responder
                 .into_iter()
                 .filter(|r| r.id != request.id)
                 .collect();
-            if total_receipts < receipts.len() {
+            if total_receipts <= receipts.len() {
                 return HttpResponse::Ok().json(models::ErrorResponse::new(&format!("No receipt with id {} found", request.id)));
             }
             match write_receipt_file(&receipts) {
@@ -142,6 +162,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         .service(get_by_id)
         .service(get_by_store)
         .service(create)
-        .service(delete);
+        .service(delete)
+        .service(edit);
     cfg.service(scope);
 }

@@ -24,6 +24,30 @@ pub struct Receipt {
 }
 
 
+impl Receipt {
+    pub fn from_receipt_entry(id:u64, receipt:ReceiptEntry) -> Receipt {
+        Receipt {
+            id,
+            store: receipt.store,
+            date: receipt.date,
+            paid_by: receipt.paid_by,
+            items: receipt.items,
+            subtotal: receipt.subtotal,
+            contributor_to_pay: receipt.contributor_to_pay,
+        }
+    }
+
+    pub fn replace_values(&mut self, other:ReceiptEntry) {
+        self.store = other.store;
+        self.date = other.date;
+        self.paid_by = other.paid_by;
+        self.items = other.items;
+        self.subtotal = other.subtotal;
+        self.contributor_to_pay = other.contributor_to_pay;
+    }
+}
+
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReceiptIdentifier {
